@@ -25,6 +25,13 @@ export interface APNSendResult {
   }>
 }
 
+private interface APNPostRequestResult {
+  status?: string, 
+  body?: string, 
+  device?: string, 
+  error?: Error 
+}
+
 let AuthorityAddress = {
   production: "https://api.push.apple.com:443",
   development: "https://api.development.push.apple.com:443"
@@ -63,25 +70,35 @@ export class APNPushProvider {
     // end workaround
   }
 
-  private ensureConnected() {
-    if (!this.session || this.session.destroyed) {
-      this.session = http2.connect(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
+  private ensureConnected(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.session || this.session.destroyed) {
+        this.session = http2.connect(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
+        
+        // set default error handler, else the emitter will throw an error that the error event is not handled
+        this.session.on('error', (err) => {
+          // if the error happens during a request, the request will receive the error as well
+          // otherwise the connection will be destroyed and will be reopened the next time this
+          // method is called
+        });
+        
+        this.session.on('close', (err) => {
+          clearInterval(this._pingInterval);
+          this._pingInterval = null;
+        });      
+  
+        this._pingInterval = setInterval(() => {
+          this.ping();
+        }, 600000); // every 10m
+      }
       
-      this.session.on('error', (err) => {
-        // if the error happens during a request, the request will receive the error as well
-        // otherwise the connection will be destroyed and will be reopened the next time this
-        // method is called
-      });      
-      
-      this.session.on('close', (err) => {
-        clearInterval(this._pingInterval);
-        this._pingInterval = null;
-      });      
-      
-      this._pingInterval = setInterval(() => {
-        this.ping();
-      }, 600000); // every 10m
-    }
+      if (this.session.connecting) {
+        this.session.on('connect', resolve);
+        this.session.on('error', reject); // will only fire if resolve was never called
+      } else {
+        resolve();
+      }      
+    });
   }
   
   private ping() {
@@ -105,24 +122,15 @@ export class APNPushProvider {
   }
 
   send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult> {
-    this.ensureConnected();
-
     if (!Array.isArray(deviceTokens)) {
       deviceTokens = [deviceTokens];
     }
 
     let authToken = this.getAuthToken();
-    return Promise.all(deviceTokens.map(deviceToken => {
-      var headers = {
-        ':method': 'POST',
-        ':path': '/3/device/' + deviceToken,
-        'authorization': 'bearer ' + authToken,
-      };
-
-      headers = Object.assign(headers, notification.headers());
-
-      return this.sendPostRequest(headers, notification.compile(), deviceToken);
-    })).then(results => {
+    
+    return this.ensureConnected().then(() => {
+      return this.allPostRequests(authToken, notification, deviceTokens);
+    }).then(results => {
       let sent = results.filter(res => res.status === "200").map(res => res.device);
       let failed = results.filter(res => res.status !== "200").map(res => {
         if (res.error) return { device: res.device, error: res.error };
@@ -135,8 +143,22 @@ export class APNPushProvider {
       return { sent, failed };
     });
   }
+  
+  private allPostRequests(authToken: string, notification: APNNotification, deviceTokens: string[]): Promise<Array<APNPostRequestResult>> {
+    return Promise.all(deviceTokens.map(deviceToken => {
+      var headers = {
+        ':method': 'POST',
+        ':path': '/3/device/' + deviceToken,
+        'authorization': 'bearer ' + authToken,
+      };
 
-  private sendPostRequest(headers, payload, deviceToken): Promise<{ status?: string, body?: string, device?: string, error?: Error }> {
+      headers = Object.assign(headers, notification.headers());
+
+      return this.sendPostRequest(headers, notification.compile(), deviceToken);
+    }));    
+  }
+
+  private sendPostRequest(headers, payload, deviceToken): Promise<APNPostRequestResult> {
     return new Promise((resolve, reject) => {
       var req = this.session.request(headers);
 

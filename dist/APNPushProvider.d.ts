@@ -27,6 +27,7 @@ export declare class APNPushProvider {
     private ping();
     private getAuthToken();
     send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult>;
+    private allPostRequests(authToken, notification, deviceTokens);
     private sendPostRequest(headers, payload, deviceToken);
     shutdown(): void;
 }
