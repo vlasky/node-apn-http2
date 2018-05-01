@@ -4,6 +4,7 @@ export interface APNProviderOptions {
     token: TokenOptions;
     production?: boolean;
     hideExperimentalHttp2Warning?: boolean;
+    requestTimeout?: number;
 }
 export interface APNSendResult {
     sent: Array<string>;
@@ -20,8 +21,10 @@ export declare class APNPushProvider {
     private session;
     private _lastToken;
     private _lastTokenTime;
+    private _pingInterval;
     constructor(options: APNProviderOptions);
     private ensureConnected();
+    private ping();
     private getAuthToken();
     send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult>;
     private sendPostRequest(headers, payload, deviceToken);

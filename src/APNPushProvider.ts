@@ -35,7 +35,7 @@ export class APNPushProvider {
   private session: ClientHttp2Session;
   private _lastToken: string;
   private _lastTokenTime: number;
-  private _pingInterval: Timeout;
+  private _pingInterval;
 
   constructor(private options: APNProviderOptions) {
     this.authToken = new AuthToken(options.token);
@@ -78,7 +78,7 @@ export class APNPushProvider {
         this._pingInterval = null;
       });      
       
-      this._pingInterval = setInterval() => {
+      this._pingInterval = setInterval(() => {
         this.ping();
       }, 600000); // every 10m
     }
