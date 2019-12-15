@@ -1,9 +1,9 @@
-node-apn-http2
+@vlasky/node-apn-http2
 ==============
 
-[![Current Version](https://img.shields.io/npm/v/node-apn-http2.svg?style=flat-square)](https://www.npmjs.org/package/node-apn-http2)
+[![Current Version](https://img.shields.io/npm/v/@vlasky/node-apn-http2.svg?style=flat-square)](https://www.npmjs.org/package/@vlasky/node-apn-http2)
 
-> A Node.js module for interfacing with the Apple Push Notification service using *NATIVE* node.js http2 API (requires node v8.8.1+)
+> A Node.js module for interfacing with the Apple Push Notification service using *NATIVE* node.js http2 API (requires node v10+)
 
 This package is supposed to be drop-in compatible with [node-apn](https://github.com/node-apn/node-apn), however, only token based credentials are supported (p8).
 
@@ -12,13 +12,13 @@ This package is supposed to be drop-in compatible with [node-apn](https://github
 [yarn](https://yarnpkg.com) is the preferred installation method:
 
 ```bash
-$ yarn add node-apn-http2
+$ yarn add @vlasky/node-apn-http2
 ```
 
 ### Load in the module
 
 ```javascript
-var apn = require('node-apn-http2');
+var apn = require('@vlasky/node-apn-http2');
 ```
 
 ```javascript
@@ -68,7 +68,7 @@ apnProvider.send(note, deviceToken).then( (result) => {
 This will result in the the following notification payload being sent to the device
 
 ```json
-{"messageFrom":"John Appelseed","aps":{"badge":3,"sound":"ping.aiff","alert":"\uD83D\uDCE7 \u2709 You have a new message"}}
+{"messageFrom":"John Appleseed","aps":{"badge":3,"sound":"ping.aiff","alert":"\uD83D\uDCE7 \u2709 You have a new message"}}
 ```
 
 You should only create one `Provider` per-process for each certificate/key pair you have. You do not need to create a new `Provider` for each notification. If you are only sending notifications to one app then there is no need for more than one `Provider`. 
@@ -80,6 +80,18 @@ If you are constantly creating `Provider` instances in your app, make sure to ca
 You are encouraged to read the extremely informative [Troubleshooting Push Notifications](http://developer.apple.com/library/ios/#technotes/tn2265/_index.html) Tech Note in the first instance, in case your query is answered there.
 
 ## History
+
+### v1.2.1
+
+Peter Verhage's enhancements:
+
+- Sends an HTTP/2 ping to the APN gateway every 10 minutes to ensure the active session is still open. If not, it will attempt to reconnect.
+- Ensures that we are connected before creating requests. This avoids creating excessive listeners.
+
+Vlad Lasky's enhancements:
+
+- Added support for the `apns-push-type` attribute, now required since the introduction of iOS 13.
+- The `apns-priority` attribute value is now correctly set.
 
 ### v1.2.0
 
