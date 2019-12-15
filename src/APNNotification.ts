@@ -34,7 +34,7 @@ export class APNNotification extends APNNotificationBase {
       headers["apns-priority"] = 5;
     }
 
-    if (this.pushtype) {
+    if (this.pushType) {
       //If a pushType has been provided, use that
       headers["apns-push-type"] = this.pushType;
       //Anything with an alert or badge or sound is considered an alert

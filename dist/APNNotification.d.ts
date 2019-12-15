@@ -5,6 +5,7 @@ export declare class APNNotification extends APNNotificationBase {
     compiled: string;
     expiry: number;
     priority: number;
+    pushType: string;
     topic: string;
     collapseId: string;
     id: string;
@@ -14,6 +15,6 @@ export declare class APNNotification extends APNNotificationBase {
     constructor(payload?: any);
     headers(): {};
     compile(): string;
-    private apsPayload();
+    private apsPayload;
     toJSON(): any;
 }

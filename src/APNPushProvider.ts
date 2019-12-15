@@ -25,7 +25,7 @@ export interface APNSendResult {
   }>
 }
 
-private interface APNPostRequestResult {
+interface APNPostRequestResult {
   status?: string, 
   body?: string, 
   device?: string, 
@@ -122,9 +122,6 @@ export class APNPushProvider {
   }
 
   send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult> {
-    if (!Array.isArray(deviceTokens)) {
-      deviceTokens = [deviceTokens];
-    }
 
     let authToken = this.getAuthToken();
     
@@ -144,7 +141,12 @@ export class APNPushProvider {
     });
   }
   
-  private allPostRequests(authToken: string, notification: APNNotification, deviceTokens: string[]): Promise<Array<APNPostRequestResult>> {
+  private allPostRequests(authToken: string, notification: APNNotification, deviceTokens: string[] | string): Promise<Array<APNPostRequestResult>> {
+
+    if (!Array.isArray(deviceTokens)) {
+      deviceTokens = [deviceTokens];
+    }
+
     return Promise.all(deviceTokens.map(deviceToken => {
       var headers = {
         ':method': 'POST',

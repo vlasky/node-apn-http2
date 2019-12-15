@@ -78,9 +78,6 @@ class APNPushProvider {
         return this._lastToken;
     }
     send(notification, deviceTokens) {
-        if (!Array.isArray(deviceTokens)) {
-            deviceTokens = [deviceTokens];
-        }
         let authToken = this.getAuthToken();
         return this.ensureConnected().then(() => {
             return this.allPostRequests(authToken, notification, deviceTokens);
@@ -99,6 +96,9 @@ class APNPushProvider {
         });
     }
     allPostRequests(authToken, notification, deviceTokens) {
+        if (!Array.isArray(deviceTokens)) {
+            deviceTokens = [deviceTokens];
+        }
         return Promise.all(deviceTokens.map(deviceToken => {
             var headers = {
                 ':method': 'POST',

@@ -23,11 +23,11 @@ export declare class APNPushProvider {
     private _lastTokenTime;
     private _pingInterval;
     constructor(options: APNProviderOptions);
-    private ensureConnected();
-    private ping();
-    private getAuthToken();
+    private ensureConnected;
+    private ping;
+    private getAuthToken;
     send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult>;
-    private allPostRequests(authToken, notification, deviceTokens);
-    private sendPostRequest(headers, payload, deviceToken);
+    private allPostRequests;
+    private sendPostRequest;
     shutdown(): void;
 }
