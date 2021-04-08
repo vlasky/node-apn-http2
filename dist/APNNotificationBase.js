@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.APNNotificationBase = void 0;
 class APNNotificationBase {
     constructor() {
         this.aps = {};

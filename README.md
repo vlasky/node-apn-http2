@@ -81,6 +81,10 @@ You are encouraged to read the extremely informative [Troubleshooting Push Notif
 
 ## History
 
+### v1.2.2
+
+- Updated dependencies jsonwebtoken to version 8.5.1 and typescript to version 4.2.4
+
 ### v1.2.1
 
 Peter Verhage's enhancements:
@@ -90,7 +94,7 @@ Peter Verhage's enhancements:
 
 Vlad Lasky's enhancements:
 
-- Added support for the `apns-push-type` attribute, now required since the introduction of iOS 13.
+- Added support for the `apns-push-type` attribute, now required for iOS 13.
 - The `apns-priority` attribute value is now correctly set.
 
 ### v1.2.0

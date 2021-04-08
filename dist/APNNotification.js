@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.APNNotification = void 0;
 const APNNotificationBase_1 = require("./APNNotificationBase");
 class APNNotification extends APNNotificationBase_1.APNNotificationBase {
     constructor(payload = {}) {

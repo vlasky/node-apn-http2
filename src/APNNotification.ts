@@ -10,9 +10,6 @@ export class APNNotification extends APNNotificationBase {
   collapseId: string = null;
   id: string = null;
 
-  badge: number;
-  sound: string;
-
   rawPayload: any;
 
   constructor(private payload: any = {}) {

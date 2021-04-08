@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.APNPushProvider = void 0;
 const Token_1 = require("./Token");
 var http2;
 let AuthorityAddress = {

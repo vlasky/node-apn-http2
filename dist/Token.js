@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.AuthToken = void 0;
 const jwt = require("jsonwebtoken");
 const fs = require("fs");
 class AuthToken {

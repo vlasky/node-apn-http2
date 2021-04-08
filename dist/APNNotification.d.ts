@@ -9,8 +9,6 @@ export declare class APNNotification extends APNNotificationBase {
     topic: string;
     collapseId: string;
     id: string;
-    badge: number;
-    sound: string;
     rawPayload: any;
     constructor(payload?: any);
     headers(): {};
