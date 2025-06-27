@@ -32,6 +32,7 @@ class APNNotification extends APNNotificationBase_1.APNNotificationBase {
         }
         if (this.pushType) {
             //If a pushType has been provided, use that
+            this.validatePushType();
             headers["apns-push-type"] = this.pushType;
             //Anything with an alert or badge or sound is considered an alert
         }
@@ -42,8 +43,13 @@ class APNNotification extends APNNotificationBase_1.APNNotificationBase {
         else if (this.aps["content-available"] === 1) {
             headers["apns-push-type"] = "background";
         }
+        else if (this._mdm) {
+            headers["apns-push-type"] = "mdm";
+        }
         else {
-            console.warn("APNNotification.ts::headers(): pushType not specified for APN notification. Might not be relayed by Apple.");
+            console.warn("APNNotification.ts::headers(): Cannot determine push type automatically. " +
+                "Set notification.pushType explicitly to 'alert', 'background', 'voip', 'mdm', etc. " +
+                "Notification may be rejected by Apple.");
         }
         if (this.id) {
             headers["apns-id"] = this.id;
@@ -70,6 +76,11 @@ class APNNotification extends APNNotificationBase_1.APNNotificationBase {
         return Object.keys(aps).find(key => aps[key] !== undefined) ? aps : undefined;
     }
     ;
+    validatePushType() {
+        if (this.pushType && !APNNotification.VALID_PUSH_TYPES.includes(this.pushType)) {
+            console.warn(`Invalid pushType '${this.pushType}'. Valid types: ${APNNotification.VALID_PUSH_TYPES.join(', ')}`);
+        }
+    }
     toJSON() {
         if (this.rawPayload != null) {
             return this.rawPayload;
@@ -82,4 +93,8 @@ class APNNotification extends APNNotificationBase_1.APNNotificationBase {
     ;
 }
 exports.APNNotification = APNNotification;
+APNNotification.VALID_PUSH_TYPES = [
+    'alert', 'background', 'voip', 'complication',
+    'fileprovider', 'mdm', 'pushtotalk'
+];
 //# sourceMappingURL=APNNotification.js.map

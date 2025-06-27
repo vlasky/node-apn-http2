@@ -1,6 +1,10 @@
 import { APNNotificationBase } from './APNNotificationBase';
 
 export class APNNotification extends APNNotificationBase {
+  static readonly VALID_PUSH_TYPES = [
+    'alert', 'background', 'voip', 'complication', 
+    'fileprovider', 'mdm', 'pushtotalk'
+  ];
   encoding = 'utf8';
   compiled: string = null;
   expiry = 0;
@@ -33,6 +37,7 @@ export class APNNotification extends APNNotificationBase {
 
     if (this.pushType) {
       //If a pushType has been provided, use that
+      this.validatePushType();
       headers["apns-push-type"] = this.pushType;
       //Anything with an alert or badge or sound is considered an alert
     } else if (this.aps.alert || this.aps.badge || this.aps.sound) {
@@ -40,8 +45,14 @@ export class APNNotification extends APNNotificationBase {
       //Otherwise, Apple's new rules for iOS 13 require pure content-available notifications to have a push type of background 
     } else if (this.aps["content-available"] === 1) {
       headers["apns-push-type"] = "background";
+    } else if (this._mdm) {
+      headers["apns-push-type"] = "mdm";
     } else {
-      console.warn("APNNotification.ts::headers(): pushType not specified for APN notification. Might not be relayed by Apple.");
+      console.warn(
+        "APNNotification.ts::headers(): Cannot determine push type automatically. " +
+        "Set notification.pushType explicitly to 'alert', 'background', 'voip', 'mdm', etc. " +
+        "Notification may be rejected by Apple."
+      );
     }
 
     if (this.id) {
@@ -75,6 +86,12 @@ export class APNNotification extends APNNotificationBase {
 
     return Object.keys(aps).find(key => aps[key] !== undefined) ? aps : undefined;
   };
+
+  private validatePushType(): void {
+    if (this.pushType && !APNNotification.VALID_PUSH_TYPES.includes(this.pushType)) {
+      console.warn(`Invalid pushType '${this.pushType}'. Valid types: ${APNNotification.VALID_PUSH_TYPES.join(', ')}`);
+    }
+  }
 
   toJSON() {
     if (this.rawPayload != null) {

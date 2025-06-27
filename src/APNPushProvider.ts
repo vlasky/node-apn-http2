@@ -1,17 +1,12 @@
 import { APNNotification } from './APNNotification';
 import { AuthToken } from './Token';
 import { TokenOptions } from './TokenOptions';
-import { Http2Session, ClientHttp2Session } from 'http2';
+import { Http2Session, ClientHttp2Session, connect, constants } from 'http2';
 
-// workaround to disable experimental http2 warning via options below
-import * as http2Type from 'http2';
-var http2: typeof http2Type; 
-// end workaround
 
 export interface APNProviderOptions {
   token: TokenOptions,
   production?: boolean,
-  hideExperimentalHttp2Warning?: boolean,
   requestTimeout?: number
 }
 
@@ -55,25 +50,12 @@ export class APNPushProvider {
       options.requestTimeout = 10000;
     }
 
-    // workaround to disable experimental http2 warning via options
-    if (options.hideExperimentalHttp2Warning) {
-      let _emitWarning = process.emitWarning;
-      process.emitWarning = () => {};
-      try {
-        http2 = require('http2');
-      } finally {
-        process.emitWarning = _emitWarning;
-      }
-    } else {
-      http2 = require('http2');
-    }
-    // end workaround
   }
 
   private ensureConnected(): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.session || this.session.destroyed) {
-        this.session = http2.connect(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
+        this.session = connect(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
         
         // set default error handler, else the emitter will throw an error that the error event is not handled
         this.session.on('error', (err) => {
@@ -166,10 +148,10 @@ export class APNPushProvider {
 
       req.setEncoding('utf8');
       
-      req.setTimeout(this.options.requestTimeout, () => req.close(http2.constants.NGHTTP2_CANCEL));
+      req.setTimeout(this.options.requestTimeout, () => req.close(constants.NGHTTP2_CANCEL));
 
       req.on('response', (headers) => {
-        let status = headers[http2.constants.HTTP2_HEADER_STATUS].toString();
+        let status = headers[constants.HTTP2_HEADER_STATUS].toString();
         // ...
         let data = '';
         req.on('data', (chunk) => {

@@ -28,7 +28,10 @@ export class AuthToken {
     return jwt.sign({}, this.keyData, {
       algorithm: "ES256",
       issuer: this.options.teamId,
-      header: { kid: this.options.keyId }
+      header: { 
+        alg: "ES256",
+        kid: this.options.keyId 
+      }
     });
   }
 }

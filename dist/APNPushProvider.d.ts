@@ -3,7 +3,6 @@ import { TokenOptions } from './TokenOptions';
 export interface APNProviderOptions {
     token: TokenOptions;
     production?: boolean;
-    hideExperimentalHttp2Warning?: boolean;
     requestTimeout?: number;
 }
 export interface APNSendResult {

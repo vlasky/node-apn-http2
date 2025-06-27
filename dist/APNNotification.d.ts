@@ -1,6 +1,7 @@
 import { APNNotificationBase } from './APNNotificationBase';
 export declare class APNNotification extends APNNotificationBase {
     private payload;
+    static readonly VALID_PUSH_TYPES: string[];
     encoding: string;
     compiled: string;
     expiry: number;
@@ -14,5 +15,6 @@ export declare class APNNotification extends APNNotificationBase {
     headers(): {};
     compile(): string;
     private apsPayload;
+    private validatePushType;
     toJSON(): any;
 }

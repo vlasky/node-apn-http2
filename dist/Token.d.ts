@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import { TokenOptions } from './TokenOptions';
 export declare class AuthToken {
     private options;

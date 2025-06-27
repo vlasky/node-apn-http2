@@ -3,7 +3,7 @@
 
 [![Current Version](https://img.shields.io/npm/v/@vlasky/node-apn-http2.svg?style=flat-square)](https://www.npmjs.org/package/@vlasky/node-apn-http2)
 
-> A Node.js module for interfacing with the Apple Push Notification service using *NATIVE* node.js http2 API (requires node v10+)
+> A Node.js module for interfacing with the Apple Push Notification service using *NATIVE* node.js http2 API (requires node v14.17+)
 
 This package is supposed to be drop-in compatible with [node-apn](https://github.com/node-apn/node-apn), however, only token based credentials are supported (p8).
 
@@ -28,10 +28,7 @@ var options = {
     keyId: "key-id",
     teamId: "developer-team-id"
   },
-  production: false,
-  hideExperimentalHttp2Warning: true // the http2 module in node is experimental and will log 
-                                     // ExperimentalWarning: The http2 module is an experimental API. 
-                                     // to the console unless this is set to true
+  production: false
 };
 
 var apnProvider = new apn.Provider(options);
@@ -80,6 +77,15 @@ If you are constantly creating `Provider` instances in your app, make sure to ca
 You are encouraged to read the extremely informative [Troubleshooting Push Notifications](http://developer.apple.com/library/ios/#technotes/tn2265/_index.html) Tech Note in the first instance, in case your query is answered there.
 
 ## History
+
+### v1.3.0
+
+- **Enhanced push type detection**: Improved automatic detection of `apns-push-type` for alert and background notifications
+- **MDM notification support**: Automatic push type detection for MDM notifications
+- **Better error messages**: More helpful warnings when push type cannot be determined automatically
+- **Push type validation**: Validation for supported Apple push types (alert, background, voip, complication, fileprovider, mdm, pushtotalk)
+- **Updated dependencies**: Updated jsonwebtoken to v9.0.2 and TypeScript to v5.8.3
+- **Node.js requirement**: Minimum Node.js version updated to 14.17.0 to match dependency requirements
 
 ### v1.2.2
 
