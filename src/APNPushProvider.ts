@@ -1,13 +1,14 @@
 import { APNNotification } from './APNNotification';
 import { AuthToken } from './Token';
 import { TokenOptions } from './TokenOptions';
-import { Http2Session, ClientHttp2Session, connect, constants } from 'http2';
+import { ClientHttp2Session, connect, constants } from 'http2';
 
 
 export interface APNProviderOptions {
   token: TokenOptions,
   production?: boolean,
-  requestTimeout?: number
+  requestTimeout?: number,
+  connectionTimeout?: number
 }
 
 export interface APNSendResult {
@@ -15,8 +16,8 @@ export interface APNSendResult {
   failed: Array<{
     device: string,
     status?: string,
-    response?: any,
-    error?: any
+    response?: unknown,
+    error?: Error
   }>
 }
 
@@ -27,67 +28,131 @@ interface APNPostRequestResult {
   error?: Error 
 }
 
-let AuthorityAddress = {
+const AuthorityAddress = {
   production: "https://api.push.apple.com:443",
   development: "https://api.development.push.apple.com:443"
 };
 
 export class APNPushProvider {
   private authToken: AuthToken;
-  private session: ClientHttp2Session;
-  private _lastToken: string;
-  private _lastTokenTime: number;
-  private _pingInterval;
+  private session: ClientHttp2Session | null = null;
+  private _lastToken: string = '';
+  private _lastTokenTime: number = 0;
+  private _pingInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(private options: APNProviderOptions) {
     this.authToken = new AuthToken(options.token);
     
-    if (typeof options.production == 'undefined' || options.production === null) {
+    if (options.production == null) {
       options.production = process.env.NODE_ENV === "production";
     }
-    
-    if (typeof options.requestTimeout == 'undefined' || options.requestTimeout === null) {
+
+    if (options.requestTimeout == null) {
       options.requestTimeout = 10000;
+    } else if (typeof options.requestTimeout !== 'number' || !Number.isFinite(options.requestTimeout) || options.requestTimeout <= 0) {
+      throw new Error("requestTimeout must be a positive number");
+    }
+
+    if (options.connectionTimeout == null) {
+      options.connectionTimeout = 30000;
+    } else if (typeof options.connectionTimeout !== 'number' || !Number.isFinite(options.connectionTimeout) || options.connectionTimeout <= 0) {
+      throw new Error("connectionTimeout must be a positive number");
     }
 
   }
 
   private ensureConnected(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (!this.session || this.session.destroyed) {
+      if (!this.session || this.session.destroyed || this.session.closed) {
         this.session = connect(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
-        
+
         // set default error handler, else the emitter will throw an error that the error event is not handled
-        this.session.on('error', (err) => {
+        this.session.on('error', () => {
           // if the error happens during a request, the request will receive the error as well
           // otherwise the connection will be destroyed and will be reopened the next time this
           // method is called
         });
-        
-        this.session.on('close', (err) => {
-          clearInterval(this._pingInterval);
+
+        this.session.on('close', () => {
+          if (this._pingInterval) {
+            clearInterval(this._pingInterval);
+          }
           this._pingInterval = null;
-        });      
-  
+          this.session = null;
+        });
+
         this._pingInterval = setInterval(() => {
           this.ping();
-        }, 600000); // every 10m
+        }, 3600000); // every 1 hour per Apple best practices
       }
-      
+
       if (this.session.connecting) {
-        this.session.on('connect', resolve);
-        this.session.on('error', reject); // will only fire if resolve was never called
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const cleanup = () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          this.session!.removeListener('connect', onConnect);
+          this.session!.removeListener('error', onError);
+          this.session!.removeListener('close', onClose);
+        };
+        const onConnect = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = (err: Error) => {
+          cleanup();
+          // Clean up so next call can create fresh session
+          if (this._pingInterval) {
+            clearInterval(this._pingInterval);
+          }
+          this._pingInterval = null;
+          this.session = null;
+          reject(err);
+        };
+        const onClose = () => {
+          cleanup();
+          // Clean up so next call can create fresh session
+          if (this._pingInterval) {
+            clearInterval(this._pingInterval);
+          }
+          this._pingInterval = null;
+          this.session = null;
+          reject(new Error('Connection closed before establishing'));
+        };
+        const onTimeout = () => {
+          cleanup();
+          // Clean up so next call can create fresh session
+          if (this._pingInterval) {
+            clearInterval(this._pingInterval);
+          }
+          this._pingInterval = null;
+          if (this.session) {
+            this.session.destroy();
+          }
+          this.session = null;
+          reject(new Error('Connection timeout'));
+        };
+        timeoutId = setTimeout(onTimeout, this.options.connectionTimeout);
+        this.session.once('connect', onConnect);
+        this.session.once('error', onError);
+        this.session.once('close', onClose);
       } else {
         resolve();
-      }      
+      }
     });
   }
   
   private ping() {
     if (this.session && !this.session.destroyed) {
-      this.session.ping(null, (err, duration, payload) => {
+      this.session.ping(Buffer.alloc(8), (err) => {
         if (err) {
-          this.ensureConnected();
+          // Attempt to reconnect. If it fails, warn the user but don't throw -
+          // the next send() will retry and surface the error with full context.
+          this.ensureConnected().catch((reconnectErr) => {
+            console.warn(`APNs connection ping failed and reconnection unsuccessful: ${reconnectErr.message}`);
+          });
         }
       });
     }
@@ -103,75 +168,198 @@ export class APNPushProvider {
     return this._lastToken;
   }
 
-  send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult> {
+  private forceRefreshToken(): string {
+    this._lastTokenTime = 0;
+    return this.getAuthToken();
+  }
 
-    let authToken = this.getAuthToken();
-    
+  private isExpiredTokenError(result: APNPostRequestResult): boolean {
+    if (result.status !== '403' || !result.body) return false;
+    try {
+      const body = JSON.parse(result.body);
+      return body.reason === 'ExpiredProviderToken';
+    } catch {
+      return false;
+    }
+  }
+
+  send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult> {
+    const authToken = this.getAuthToken();
+
     return this.ensureConnected().then(() => {
       return this.allPostRequests(authToken, notification, deviceTokens);
     }).then(results => {
-      let sent = results.filter(res => res.status === "200").map(res => res.device);
-      let failed = results.filter(res => res.status !== "200").map(res => {
-        if (res.error) return { device: res.device, error: res.error };
-        return {
-          device: res.device,
-          status: res.status,
-          response: JSON.parse(res.body)
+      const sent = results.filter(res => res.status === "200").map(res => res.device!);
+      const failed = results.filter(res => res.status !== "200").map(res => {
+        if (res.error) return { device: res.device!, error: res.error };
+        let response: unknown;
+        try {
+          response = res.body ? JSON.parse(res.body) : undefined;
+        } catch {
+          response = res.body;
         }
+        return {
+          device: res.device!,
+          status: res.status,
+          response
+        };
       });
       return { sent, failed };
     });
   }
   
-  private allPostRequests(authToken: string, notification: APNNotification, deviceTokens: string[] | string): Promise<Array<APNPostRequestResult>> {
+  private static readonly DEVICE_TOKEN_REGEX = /^[0-9a-fA-F]+$/;
 
+  private validateDeviceToken(token: string): string | null {
+    if (!token || typeof token !== 'string') {
+      return 'Device token must be a non-empty string';
+    }
+    if (!APNPushProvider.DEVICE_TOKEN_REGEX.test(token)) {
+      return 'Device token must be a hexadecimal string';
+    }
+    return null;
+  }
+
+  private allPostRequests(authToken: string, notification: APNNotification, deviceTokens: string[] | string): Promise<Array<APNPostRequestResult>> {
     if (!Array.isArray(deviceTokens)) {
       deviceTokens = [deviceTokens];
     }
 
-    return Promise.all(deviceTokens.map(deviceToken => {
-      var headers = {
+    const results: APNPostRequestResult[] = new Array(deviceTokens.length);
+
+    // Validate all device tokens upfront
+    for (let i = 0; i < deviceTokens.length; i++) {
+      const error = this.validateDeviceToken(deviceTokens[i]);
+      if (error) {
+        results[i] = { device: deviceTokens[i], error: new Error(error) };
+      }
+    }
+    // Use server's advertised limit, but treat 0 or undefined as 1 to avoid deadlock
+    const serverLimit = this.session!.remoteSettings.maxConcurrentStreams;
+    const maxConcurrent = (serverLimit && serverLimit > 0) ? serverLimit : 1;
+    let currentToken = authToken;
+    let nextIndex = 0;
+    let inFlight = 0;
+    let resolveAll: () => void;
+
+    const compiledPayload = notification.compile();
+    const notificationHeaders = notification.headers();
+
+    const sendRequest = (index: number, deviceToken: string, token: string, isRetry: boolean) => {
+      const headers: Record<string, string | number> = {
         ':method': 'POST',
         ':path': '/3/device/' + deviceToken,
-        'authorization': 'bearer ' + authToken,
+        'authorization': 'bearer ' + token,
       };
+      Object.assign(headers, notificationHeaders);
 
-      headers = Object.assign(headers, notification.headers());
+      this.sendPostRequest(headers, compiledPayload, deviceToken).then(result => {
+        // Retry once on ExpiredProviderToken
+        if (!isRetry && this.isExpiredTokenError(result)) {
+          currentToken = this.forceRefreshToken();
+          sendRequest(index, deviceToken, currentToken, true);
+          return;
+        }
 
-      return this.sendPostRequest(headers, notification.compile(), deviceToken);
-    }));    
+        results[index] = result;
+        inFlight--;
+        if (nextIndex < deviceTokens.length) {
+          processNext();
+        } else if (inFlight === 0) {
+          resolveAll();
+        }
+      });
+    };
+
+    const processNext = () => {
+      while (inFlight < maxConcurrent && nextIndex < deviceTokens.length) {
+        const index = nextIndex++;
+        const deviceToken = (deviceTokens as string[])[index];
+        // Skip tokens that already have validation errors
+        if (results[index]) {
+          continue;
+        }
+        inFlight++;
+        sendRequest(index, deviceToken, currentToken, false);
+      }
+      // If no requests in flight and no more tokens to process, we're done
+      // (handles case where remaining tokens all had validation errors)
+      if (inFlight === 0 && nextIndex >= deviceTokens.length) {
+        resolveAll();
+      }
+    };
+
+    return new Promise(resolve => {
+      resolveAll = () => resolve(results);
+      if (deviceTokens.length === 0) {
+        resolveAll();
+      } else {
+        processNext();
+      }
+    });
   }
 
-  private sendPostRequest(headers, payload, deviceToken): Promise<APNPostRequestResult> {
-    return new Promise((resolve, reject) => {
-      var req = this.session.request(headers);
+  private sendPostRequest(headers: Record<string, string | number>, payload: string, deviceToken: string): Promise<APNPostRequestResult> {
+    return new Promise((resolve) => {
+      let req;
+      try {
+        req = this.session!.request(headers);
+      } catch (err) {
+        resolve({ error: err as Error, device: deviceToken });
+        return;
+      }
+
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let status: string | undefined;
+
+      const settle = (result: APNPostRequestResult) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve(result);
+      };
+
+      timeoutId = setTimeout(() => {
+        settle({ error: new Error('Request timeout'), device: deviceToken });
+        try { req.close(constants.NGHTTP2_CANCEL); } catch {}
+      }, this.options.requestTimeout!);
 
       req.setEncoding('utf8');
-      
-      req.setTimeout(this.options.requestTimeout, () => req.close(constants.NGHTTP2_CANCEL));
 
-      req.on('response', (headers) => {
-        let status = headers[constants.HTTP2_HEADER_STATUS].toString();
-        // ...
+      req.on('response', (responseHeaders) => {
+        status = responseHeaders[constants.HTTP2_HEADER_STATUS]?.toString();
         let data = '';
-        req.on('data', (chunk) => {
-          data += chunk;
-        });
-        req.on('end', () => {
-          resolve({ status: status, body: data, device: deviceToken });
-        })
+        req.on('data', (chunk) => data += chunk);
+        req.on('end', () => settle({ status, body: data, device: deviceToken }));
       });
 
-      req.on('error', (err) => {
-        resolve({ error: err, device: deviceToken });
+      req.on('error', (err) => settle({ error: err, device: deviceToken }));
+
+      req.on('close', () => {
+        // Include status if we received response headers before the stream closed
+        if (status) {
+          settle({ status, error: new Error('Stream closed unexpectedly'), device: deviceToken });
+        } else {
+          settle({ error: new Error('Stream closed unexpectedly'), device: deviceToken });
+        }
       });
 
-      req.write(payload);
-      req.end();
+      try {
+        req.write(payload);
+        req.end();
+      } catch (err) {
+        settle({ error: err as Error, device: deviceToken });
+        try { req.close(constants.NGHTTP2_CANCEL); } catch {}
+      }
     });
   }
 
   shutdown() {
-    this.session.destroy();
+    if (this._pingInterval) {
+      clearInterval(this._pingInterval);
+      this._pingInterval = null;
+    }
+    this.session?.destroy();
   }
 }

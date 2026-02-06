@@ -1,20 +1,43 @@
 import { APNNotificationBase } from './APNNotificationBase';
 export declare class APNNotification extends APNNotificationBase {
-    private payload;
-    static readonly VALID_PUSH_TYPES: string[];
+    static readonly VALID_PUSH_TYPES: readonly ["alert", "background", "voip", "complication", "fileprovider", "mdm", "pushtotalk", "liveactivity", "location"];
+    static readonly VALID_PRIORITIES: readonly [1, 5, 10];
     encoding: string;
-    compiled: string;
-    expiry: number;
-    priority: number;
-    pushType: string;
-    topic: string;
-    collapseId: string;
-    id: string;
-    rawPayload: any;
-    constructor(payload?: any);
-    headers(): {};
+    private _expiry;
+    private _priority;
+    private _pushType;
+    private _topic;
+    private _collapseId;
+    private _id;
+    private _pushTypeWarningShown;
+    get topic(): string | undefined;
+    set topic(value: string | null | undefined);
+    get expiry(): number | undefined;
+    set expiry(value: number | null | undefined);
+    get priority(): 1 | 5 | 10 | undefined;
+    set priority(value: 1 | 5 | 10 | null | undefined);
+    get pushType(): typeof APNNotification.VALID_PUSH_TYPES[number] | undefined;
+    set pushType(value: typeof APNNotification.VALID_PUSH_TYPES[number] | null | undefined);
+    get collapseId(): string | undefined;
+    set collapseId(value: string | null | undefined);
+    get id(): string | undefined;
+    set id(value: string | null | undefined);
+    rawPayload: Record<string, unknown> | undefined;
+    payload: Record<string, unknown>;
+    constructor(payload?: Record<string, unknown>);
+    /**
+     * Check if alert has actual content (not an empty object or object with only undefined values)
+     */
+    private hasAlertContent;
+    /**
+     * Check if notification has visible content (alert, badge, or sound)
+     * Uses != null to treat both null and undefined as absent (consistent with apsPayload filtering)
+     */
+    private hasVisibleContent;
+    private validatePriority;
+    headers(): Record<string, string | number>;
     compile(): string;
     private apsPayload;
     private validatePushType;
-    toJSON(): any;
+    toJSON(): Record<string, unknown>;
 }

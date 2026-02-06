@@ -4,14 +4,15 @@ export interface APNProviderOptions {
     token: TokenOptions;
     production?: boolean;
     requestTimeout?: number;
+    connectionTimeout?: number;
 }
 export interface APNSendResult {
     sent: Array<string>;
     failed: Array<{
         device: string;
         status?: string;
-        response?: any;
-        error?: any;
+        response?: unknown;
+        error?: Error;
     }>;
 }
 export declare class APNPushProvider {
@@ -25,7 +26,11 @@ export declare class APNPushProvider {
     private ensureConnected;
     private ping;
     private getAuthToken;
+    private forceRefreshToken;
+    private isExpiredTokenError;
     send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult>;
+    private static readonly DEVICE_TOKEN_REGEX;
+    private validateDeviceToken;
     private allPostRequests;
     private sendPostRequest;
     shutdown(): void;

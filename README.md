@@ -7,6 +7,10 @@
 
 This package is supposed to be drop-in compatible with [node-apn](https://github.com/node-apn/node-apn), however, only token based credentials are supported (p8).
 
+### Upgrading to v1.4.0
+
+Version 1.4.0 adds comprehensive input validation. Code that previously passed invalid values silently will now throw descriptive errors. This helps catch bugs early, but may require code changes if you were relying on lenient behavior. See [CHANGELOG.md](CHANGELOG.md) for details.
+
 ### Installation
 
 [yarn](https://yarnpkg.com) is the preferred installation method:
@@ -76,45 +80,6 @@ If you are constantly creating `Provider` instances in your app, make sure to ca
 
 You are encouraged to read the extremely informative [Troubleshooting Push Notifications](http://developer.apple.com/library/ios/#technotes/tn2265/_index.html) Tech Note in the first instance, in case your query is answered there.
 
-## History
+## Changelog
 
-### v1.3.0
-
-- **Enhanced push type detection**: Improved automatic detection of `apns-push-type` for alert and background notifications
-- **MDM notification support**: Automatic push type detection for MDM notifications
-- **Better error messages**: More helpful warnings when push type cannot be determined automatically
-- **Push type validation**: Validation for supported Apple push types (alert, background, voip, complication, fileprovider, mdm, pushtotalk)
-- **Updated dependencies**: Updated jsonwebtoken to v9.0.2 and TypeScript to v5.8.3
-- **Node.js requirement**: Minimum Node.js version updated to 14.17.0 to match dependency requirements
-
-### v1.2.2
-
-- Updated dependencies jsonwebtoken to version 8.5.1 and typescript to version 4.2.4
-
-### v1.2.1
-
-Peter Verhage's enhancements:
-
-- Sends an HTTP/2 ping to the APN gateway every 10 minutes to ensure the active session is still open. If not, it will attempt to reconnect.
-- Ensures that we are connected before creating requests. This avoids creating excessive listeners.
-
-Vlad Lasky's enhancements:
-
-- Added support for the `apns-push-type` attribute, now required for iOS 13.
-- The `apns-priority` attribute value is now correctly set.
-
-### v1.2.0
-
-- return potential error response body as object instead of string (fixes #4) 
-
-### v1.1.0
-
-- add option to hide "ExperimentalWarning: The http2 module is an experimental API." message
-
-### v1.0.1
-
-- fix base64 encoded p8 token string not being correctly identified as a string
-
-### v1.0.0
-
-- returned promise from `.send()` is now compatible with the one that `node-apn` normally returned
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes.
