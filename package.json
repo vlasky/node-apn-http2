@@ -8,7 +8,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepublish": "tsc -p ."
   },
-  "repository": "https://github.com/vlasky/node-apn-http2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vlasky/node-apn-http2.git"
+  },
   "author": "Vlad Lasky <github@vladlasky.com> (https://github.com/vlasky)",
   "contributors": [
     "Andrei Alecu (https://github.com/andreialecu)",

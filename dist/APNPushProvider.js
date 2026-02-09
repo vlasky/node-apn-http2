@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.APNPushProvider = void 0;
 const Token_1 = require("./Token");
@@ -11,6 +20,7 @@ class APNPushProvider {
     constructor(options) {
         this.options = options;
         this.session = null;
+        this._remoteSettingsKnown = false;
         this._lastToken = '';
         this._lastTokenTime = 0;
         this._pingInterval = null;
@@ -34,18 +44,26 @@ class APNPushProvider {
     ensureConnected() {
         return new Promise((resolve, reject) => {
             if (!this.session || this.session.destroyed || this.session.closed) {
-                this.session = (0, http2_1.connect)(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
+                const newSession = (0, http2_1.connect)(this.options.production ? AuthorityAddress.production : AuthorityAddress.development);
+                this.session = newSession;
+                this._remoteSettingsKnown = false;
                 // set default error handler, else the emitter will throw an error that the error event is not handled
-                this.session.on('error', () => {
+                newSession.on('error', () => {
                     // if the error happens during a request, the request will receive the error as well
                     // otherwise the connection will be destroyed and will be reopened the next time this
                     // method is called
                 });
-                this.session.on('close', () => {
+                newSession.once('remoteSettings', () => {
+                    if (this.session === newSession) {
+                        this._remoteSettingsKnown = true;
+                    }
+                });
+                newSession.on('close', () => {
                     if (this._pingInterval) {
                         clearInterval(this._pingInterval);
                     }
                     this._pingInterval = null;
+                    this._remoteSettingsKnown = false;
                     this.session = null;
                 });
                 this._pingInterval = setInterval(() => {
@@ -53,15 +71,16 @@ class APNPushProvider {
                 }, 3600000); // every 1 hour per Apple best practices
             }
             if (this.session.connecting) {
+                const connectingSession = this.session;
                 let timeoutId = null;
                 const cleanup = () => {
                     if (timeoutId) {
                         clearTimeout(timeoutId);
                         timeoutId = null;
                     }
-                    this.session.removeListener('connect', onConnect);
-                    this.session.removeListener('error', onError);
-                    this.session.removeListener('close', onClose);
+                    connectingSession.removeListener('connect', onConnect);
+                    connectingSession.removeListener('error', onError);
+                    connectingSession.removeListener('close', onClose);
                 };
                 const onConnect = () => {
                     cleanup();
@@ -74,7 +93,10 @@ class APNPushProvider {
                         clearInterval(this._pingInterval);
                     }
                     this._pingInterval = null;
-                    this.session = null;
+                    if (this.session === connectingSession) {
+                        this._remoteSettingsKnown = false;
+                        this.session = null;
+                    }
                     reject(err);
                 };
                 const onClose = () => {
@@ -84,7 +106,10 @@ class APNPushProvider {
                         clearInterval(this._pingInterval);
                     }
                     this._pingInterval = null;
-                    this.session = null;
+                    if (this.session === connectingSession) {
+                        this._remoteSettingsKnown = false;
+                        this.session = null;
+                    }
                     reject(new Error('Connection closed before establishing'));
                 };
                 const onTimeout = () => {
@@ -94,16 +119,19 @@ class APNPushProvider {
                         clearInterval(this._pingInterval);
                     }
                     this._pingInterval = null;
-                    if (this.session) {
-                        this.session.destroy();
+                    if (!connectingSession.destroyed) {
+                        connectingSession.destroy();
                     }
-                    this.session = null;
+                    if (this.session === connectingSession) {
+                        this._remoteSettingsKnown = false;
+                        this.session = null;
+                    }
                     reject(new Error('Connection timeout'));
                 };
                 timeoutId = setTimeout(onTimeout, this.options.connectionTimeout);
-                this.session.once('connect', onConnect);
-                this.session.once('error', onError);
-                this.session.once('close', onClose);
+                connectingSession.once('connect', onConnect);
+                connectingSession.once('error', onError);
+                connectingSession.once('close', onClose);
             }
             else {
                 resolve();
@@ -112,8 +140,20 @@ class APNPushProvider {
     }
     ping() {
         if (this.session && !this.session.destroyed) {
-            this.session.ping(Buffer.alloc(8), (err) => {
+            const pingSession = this.session;
+            pingSession.ping(Buffer.alloc(8), (err) => {
                 if (err) {
+                    if (this._pingInterval) {
+                        clearInterval(this._pingInterval);
+                    }
+                    this._pingInterval = null;
+                    if (this.session === pingSession) {
+                        this._remoteSettingsKnown = false;
+                        this.session = null;
+                    }
+                    if (!pingSession.destroyed) {
+                        pingSession.destroy();
+                    }
                     // Attempt to reconnect. If it fails, warn the user but don't throw -
                     // the next send() will retry and surface the error with full context.
                     this.ensureConnected().catch((reconnectErr) => {
@@ -148,10 +188,10 @@ class APNPushProvider {
         }
     }
     send(notification, deviceTokens) {
-        const authToken = this.getAuthToken();
-        return this.ensureConnected().then(() => {
-            return this.allPostRequests(authToken, notification, deviceTokens);
-        }).then(results => {
+        return __awaiter(this, void 0, void 0, function* () {
+            const authToken = this.getAuthToken();
+            yield this.ensureConnected();
+            const results = yield this.allPostRequests(authToken, notification, deviceTokens);
             const sent = results.filter(res => res.status === "200").map(res => res.device);
             const failed = results.filter(res => res.status !== "200").map(res => {
                 if (res.error)
@@ -172,6 +212,20 @@ class APNPushProvider {
             return { sent, failed };
         });
     }
+    normalizeDeviceTokenForResult(token) {
+        if (typeof token === 'string') {
+            return token;
+        }
+        if (token == null) {
+            return '';
+        }
+        try {
+            return String(token);
+        }
+        catch (_a) {
+            return '';
+        }
+    }
     validateDeviceToken(token) {
         if (!token || typeof token !== 'string') {
             return 'Device token must be a non-empty string';
@@ -182,20 +236,18 @@ class APNPushProvider {
         return null;
     }
     allPostRequests(authToken, notification, deviceTokens) {
-        if (!Array.isArray(deviceTokens)) {
-            deviceTokens = [deviceTokens];
-        }
-        const results = new Array(deviceTokens.length);
+        const tokens = Array.isArray(deviceTokens) ? deviceTokens : [deviceTokens];
+        const results = new Array(tokens.length);
         // Validate all device tokens upfront
-        for (let i = 0; i < deviceTokens.length; i++) {
-            const error = this.validateDeviceToken(deviceTokens[i]);
+        for (let i = 0; i < tokens.length; i++) {
+            const error = this.validateDeviceToken(tokens[i]);
             if (error) {
-                results[i] = { device: deviceTokens[i], error: new Error(error) };
+                results[i] = { device: this.normalizeDeviceTokenForResult(tokens[i]), error: new Error(error) };
             }
         }
         // Use server's advertised limit, but treat 0 or undefined as 1 to avoid deadlock
         const serverLimit = this.session.remoteSettings.maxConcurrentStreams;
-        const maxConcurrent = (serverLimit && serverLimit > 0) ? serverLimit : 1;
+        const maxConcurrent = this._remoteSettingsKnown && serverLimit && serverLimit > 0 ? serverLimit : 1;
         let currentToken = authToken;
         let nextIndex = 0;
         let inFlight = 0;
@@ -218,7 +270,7 @@ class APNPushProvider {
                 }
                 results[index] = result;
                 inFlight--;
-                if (nextIndex < deviceTokens.length) {
+                if (nextIndex < tokens.length) {
                     processNext();
                 }
                 else if (inFlight === 0) {
@@ -227,9 +279,9 @@ class APNPushProvider {
             });
         };
         const processNext = () => {
-            while (inFlight < maxConcurrent && nextIndex < deviceTokens.length) {
+            while (inFlight < maxConcurrent && nextIndex < tokens.length) {
                 const index = nextIndex++;
-                const deviceToken = deviceTokens[index];
+                const deviceToken = tokens[index];
                 // Skip tokens that already have validation errors
                 if (results[index]) {
                     continue;
@@ -239,13 +291,13 @@ class APNPushProvider {
             }
             // If no requests in flight and no more tokens to process, we're done
             // (handles case where remaining tokens all had validation errors)
-            if (inFlight === 0 && nextIndex >= deviceTokens.length) {
+            if (inFlight === 0 && nextIndex >= tokens.length) {
                 resolveAll();
             }
         };
         return new Promise(resolve => {
             resolveAll = () => resolve(results);
-            if (deviceTokens.length === 0) {
+            if (tokens.length === 0) {
                 resolveAll();
             }
             else {
@@ -264,7 +316,6 @@ class APNPushProvider {
                 return;
             }
             let settled = false;
-            let timeoutId;
             let status;
             const settle = (result) => {
                 if (settled)
@@ -274,12 +325,12 @@ class APNPushProvider {
                     clearTimeout(timeoutId);
                 resolve(result);
             };
-            timeoutId = setTimeout(() => {
+            const timeoutId = setTimeout(() => {
                 settle({ error: new Error('Request timeout'), device: deviceToken });
                 try {
                     req.close(http2_1.constants.NGHTTP2_CANCEL);
                 }
-                catch (_a) { }
+                catch ( /* noop */_a) { /* noop */ }
             }, this.options.requestTimeout);
             req.setEncoding('utf8');
             req.on('response', (responseHeaders) => {
@@ -308,7 +359,7 @@ class APNPushProvider {
                 try {
                     req.close(http2_1.constants.NGHTTP2_CANCEL);
                 }
-                catch (_a) { }
+                catch ( /* noop */_a) { /* noop */ }
             }
         });
     }

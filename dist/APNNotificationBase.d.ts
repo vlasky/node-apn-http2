@@ -31,6 +31,8 @@ interface APSPayload {
     "thread-id"?: string;
 }
 export declare class APNNotificationBase {
+    private static readonly ALERT_ALLOWED_FIELDS;
+    private static readonly ALERT_ARRAY_FIELDS;
     aps: APSPayload;
     _mdm: string | undefined;
     set alert(value: APSAlert | string | undefined | null);

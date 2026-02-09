@@ -1,5 +1,7 @@
 import { APNNotificationBase } from './APNNotificationBase';
 
+type NotificationPayload = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- payload is intentionally free-form for JS/checkJs consumers
+
 export class APNNotification extends APNNotificationBase {
   static readonly VALID_PUSH_TYPES = [
     'alert', 'background', 'voip', 'complication',
@@ -102,11 +104,11 @@ export class APNNotification extends APNNotificationBase {
     }
   }
 
-  rawPayload: Record<string, unknown> | undefined = undefined;
+  rawPayload: NotificationPayload | undefined = undefined;
 
-  payload: Record<string, unknown>;
+  payload: NotificationPayload;
 
-  constructor(payload: Record<string, unknown> = {}) {
+  constructor(payload: NotificationPayload = {}) {
     super();
     this.payload = payload;
   }
@@ -321,7 +323,7 @@ export class APNNotification extends APNNotificationBase {
     }
   }
 
-  toJSON() {
+  toJSON(): NotificationPayload {
     if (this.rawPayload != null) {
       return this.rawPayload;
     }
