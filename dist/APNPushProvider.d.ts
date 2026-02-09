@@ -19,6 +19,7 @@ export declare class APNPushProvider {
     private options;
     private authToken;
     private session;
+    private _remoteSettingsKnown;
     private _lastToken;
     private _lastTokenTime;
     private _pingInterval;
@@ -30,6 +31,7 @@ export declare class APNPushProvider {
     private isExpiredTokenError;
     send(notification: APNNotification, deviceTokens: string[] | string): Promise<APNSendResult>;
     private static readonly DEVICE_TOKEN_REGEX;
+    private normalizeDeviceTokenForResult;
     private validateDeviceToken;
     private allPostRequests;
     private sendPostRequest;

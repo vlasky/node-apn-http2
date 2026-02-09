@@ -34,6 +34,23 @@ interface APSPayload {
 }
 
 export class APNNotificationBase {
+    private static readonly ALERT_ALLOWED_FIELDS = new Set([
+      "title",
+      "subtitle",
+      "body",
+      "loc-key",
+      "loc-args",
+      "title-loc-key",
+      "title-loc-args",
+      "action-loc-key",
+      "launch-image"
+    ]);
+
+    private static readonly ALERT_ARRAY_FIELDS = new Set([
+      "loc-args",
+      "title-loc-args"
+    ]);
+
     aps: APSPayload = {};
 
     _mdm: string | undefined;
@@ -50,13 +67,20 @@ export class APNNotificationBase {
       } else if (typeof value === 'object' && !Array.isArray(value)) {
         // Validate alert object fields
         for (const [k, v] of Object.entries(value)) {
+          if (!APNNotificationBase.ALERT_ALLOWED_FIELDS.has(k)) {
+            throw new Error(`alert.${k} is not a supported APNs alert field`);
+          }
           if (v == null) continue;
+          const isArrayField = APNNotificationBase.ALERT_ARRAY_FIELDS.has(k);
           if (Array.isArray(v)) {
+            if (!isArrayField) {
+              throw new Error(`alert.${k} must be a non-empty string`);
+            }
             // Array fields (loc-args, title-loc-args) - validate elements are non-empty strings if present
             if (v.length > 0 && !v.every(item => typeof item === 'string' && item !== '')) {
               throw new Error(`alert.${k} must be an array of non-empty strings`);
             }
-          } else if (typeof v !== 'string' || v === '') {
+          } else if (isArrayField || typeof v !== 'string' || v === '') {
             throw new Error(`alert.${k} must be a non-empty string`);
           }
         }

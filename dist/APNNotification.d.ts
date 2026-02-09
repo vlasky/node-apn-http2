@@ -1,4 +1,5 @@
 import { APNNotificationBase } from './APNNotificationBase';
+type NotificationPayload = Record<string, any>;
 export declare class APNNotification extends APNNotificationBase {
     static readonly VALID_PUSH_TYPES: readonly ["alert", "background", "voip", "complication", "fileprovider", "mdm", "pushtotalk", "liveactivity", "location"];
     static readonly VALID_PRIORITIES: readonly [1, 5, 10];
@@ -22,9 +23,9 @@ export declare class APNNotification extends APNNotificationBase {
     set collapseId(value: string | null | undefined);
     get id(): string | undefined;
     set id(value: string | null | undefined);
-    rawPayload: Record<string, unknown> | undefined;
-    payload: Record<string, unknown>;
-    constructor(payload?: Record<string, unknown>);
+    rawPayload: NotificationPayload | undefined;
+    payload: NotificationPayload;
+    constructor(payload?: NotificationPayload);
     /**
      * Check if alert has actual content (not an empty object or object with only undefined values)
      */
@@ -39,5 +40,6 @@ export declare class APNNotification extends APNNotificationBase {
     compile(): string;
     private apsPayload;
     private validatePushType;
-    toJSON(): Record<string, unknown>;
+    toJSON(): NotificationPayload;
 }
+export {};
